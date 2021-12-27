@@ -19,8 +19,8 @@ import ChatSidebar from '../../components/ChatSidebar';
 import { useDebounce } from 'use-debounce';
 import { getDownloadURL, ref, uploadString } from 'firebase/storage';
 
-const Group = ({ messages, chat }) => {
-    const groupChat = JSON.parse(chat);
+const Group = () => {
+    // const chat = JSON.parse(chat);
     const router = useRouter();
     const [user] = useAuthState(auth);
     
@@ -31,6 +31,9 @@ const Group = ({ messages, chat }) => {
     const [members, setMembers] = useState([]);
     const [membersEmails, setMembersEmails] = useState([]);
     const [users, setUsers] = useState([]);
+
+    const [messages, setMessages] = useState([]);
+    const [chat, setChat] = useState({});
     
     const [showingMessages, setShowingMessages] = useState([]);
     const [isShowingSettings, setIsShowingSettings] = useState(false);
@@ -50,18 +53,13 @@ const Group = ({ messages, chat }) => {
     const usersRef = collection(db, 'users');
     // onSnapshot(membersRef, snapshot => setMembers(snapshot.data().members));
     
-    useEffect(() => {
-        const unsubscribe = () => {
+    useEffect(async () => {
             onSnapshot(messagesRef, snapshot => {
                 setShowingMessages(snapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data(),
                 })));
             });
-
-        }; 
-        
-        unsubscribe();
     }, [messages]);
 
     useEffect(() => {
@@ -79,6 +77,37 @@ const Group = ({ messages, chat }) => {
 
         unsubscribe();
 
+    }, [router.query.id]);
+
+    useEffect(() => {
+        const unsubscribe = async () => {
+            setLoading(true);
+            const ref = doc(db, 'groups', router.query.id);
+    
+            // Prep the messages
+            const messagesRef = await getDocs(query(collection(ref, 'messages'), orderBy('timestamp', 'asc')));
+
+            const messages = messagesRef.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+            })).map(messages => ({
+                ...messages,
+                timestamp: serverTimestamp(),
+            }));
+
+            // Prep the chat
+            const chatRef = await getDoc(ref);
+            const chat = {
+                id: chatRef.id,
+                ...chatRef.data(),
+            };
+
+            setMessages(messages);
+            setChat(chat);
+            setLoading(false);
+        }
+        
+        unsubscribe();
     }, [router.query.id]);
 
     const sendMessage = async (e) => {
@@ -179,10 +208,12 @@ const Group = ({ messages, chat }) => {
         };
     };
 
+    if(loading) return 'Loading...';
+
     return (
         <div className='flex flex-1'>
             <Head>
-                <title>{groupChat.groupName}</title>
+                <title>{chat?.groupName}</title>
             </Head>
 
             <Sidebar />
@@ -198,10 +229,10 @@ const Group = ({ messages, chat }) => {
                     )}
                 <div className='sticky top-0 flex flex-col border-b-4 w-full font-semibold tracking-wider text-start pl-4 py-2 z-50 bg-white'>
                     <div className='flex flex-1'>
-                        <span className='flex-1 my-auto'>{groupChat?.groupName}</span>
+                        <span className='flex-1 my-auto'>{chat?.groupName}</span>
                         
                         <div className='flex-1'>
-                            <img src={groupChat.image} className='w-16 h-16 rounded-full' />
+                            {!loading ? <img src={chat.image} className='w-16 h-16 rounded-full' /> : 'loading...'}
                         </div>
                         
                         <SettingsIcon className={`mr-4 transition-all cursor-pointer my-auto ${isShowingSettings ? 'text-red-500' : 'text-black'}`} onClick={() => setIsShowingSettings(!isShowingSettings)} />
@@ -273,31 +304,31 @@ const Group = ({ messages, chat }) => {
 
 export default Group;
 
-export async function getServerSideProps(context) {
-    const ref = doc(db, 'groups', context.query.id);
+// export async function getServerSideProps(context) {
+//     const ref = doc(db, 'groups', context.query.id);
     
-    // Prep the messages
-    const messagesRef = await getDocs(query(collection(ref, 'messages'), orderBy('timestamp', 'asc')));
+//     // Prep the messages
+//     const messagesRef = await getDocs(query(collection(ref, 'messages'), orderBy('timestamp', 'asc')));
 
-    const messages = messagesRef.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-    })).map(messages => ({
-        ...messages,
-        timestamp: serverTimestamp(),
-    }));
+//     const messages = messagesRef.docs.map(doc => ({
+//         id: doc.id,
+//         ...doc.data(),
+//     })).map(messages => ({
+//         ...messages,
+//         timestamp: serverTimestamp(),
+//     }));
 
-    // Prep the chat
-    const chatRef = await getDoc(ref);
-    const chat = {
-        id: chatRef.id,
-        ...chatRef.data(),
-    };
+//     // Prep the chat
+//     const chatRef = await getDoc(ref);
+//     const chat = {
+//         id: chatRef.id,
+//         ...chatRef.data(),
+//     };
 
-    return {
-        props: {
-            messages: JSON.stringify(messages),
-            chat: JSON.stringify(chat),
-        }
-    }
-};
+//     return {
+//         props: {
+//             messages: JSON.stringify(messages),
+//             chat: JSON.stringify(chat),
+//         }
+//     }
+// };
